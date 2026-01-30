@@ -1,442 +1,344 @@
 # CLI Todo App
 
-A simple, portable command-line todo list manager written in Python with zero external dependencies. Store your tasks in a JSON file and manage them from your terminal.
+A simple, lightweight command-line todo list manager written in Python. No external dependencies required—just Python 3.7+ and you're ready to go!
 
 ## Features
 
-- ✅ **Zero Dependencies** - Uses only Python standard library (3.8+)
-- 📦 **Single File** - Entire application in one Python file
-- 💾 **JSON Storage** - Human-readable data format stored in `~/.todo.json`
-- 🔒 **Atomic Writes** - Safe concurrent access with automatic backups
-- 🆔 **Smart ID Matching** - Use partial task IDs (minimum 4 characters)
-- 🎨 **Clean Interface** - Simple, intuitive command-line interface
-- 🧪 **Well Tested** - Comprehensive test suite with 80%+ coverage
-
-## Installation
-
-### Option 1: Direct Usage (No Installation)
-
-```bash
-# Download the script
-curl -o todo.py https://raw.githubusercontent.com/gianfranco-omnigpt/cli-todo-app/main/todo.py
-
-# Make it executable
-chmod +x todo.py
-
-# Run it
-./todo.py add "My first task"
-```
-
-### Option 2: System-Wide Installation
-
-```bash
-# Download the script
-curl -o todo.py https://raw.githubusercontent.com/gianfranco-omnigpt/cli-todo-app/main/todo.py
-
-# Make it executable
-chmod +x todo.py
-
-# Move to a directory in your PATH
-sudo mv todo.py /usr/local/bin/todo
-
-# Or create a symlink
-sudo ln -s "$(pwd)/todo.py" /usr/local/bin/todo
-
-# Now you can use it from anywhere
-todo add "System-wide task"
-```
-
-### Option 3: Virtual Environment
-
-```bash
-# Clone the repository
-git clone https://github.com/gianfranco-omnigpt/cli-todo-app.git
-cd cli-todo-app
-
-# Create virtual environment (optional but recommended for development)
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Make executable
-chmod +x todo.py
-
-# Run
-./todo.py --help
-```
+✨ **Simple & Fast**: Single-file application with intuitive commands  
+💾 **Persistent Storage**: Todos saved to `~/.todo.json` across sessions  
+🔒 **Atomic Writes**: Safe file operations prevent data corruption  
+🎯 **Zero Dependencies**: Uses only Python standard library  
+🌍 **Cross-Platform**: Works on Windows, macOS, and Linux  
 
 ## Requirements
 
-- Python 3.8 or higher
-- No external dependencies required
+- Python 3.7 or higher
+- No external dependencies
+
+## Installation
+
+1. **Download the script:**
+   ```bash
+   curl -O https://raw.githubusercontent.com/gianfranco-omnigpt/cli-todo-app/main/todo.py
+   ```
+
+2. **Make it executable (Unix/macOS):**
+   ```bash
+   chmod +x todo.py
+   ```
+
+3. **Optional: Add to PATH for global access:**
+   ```bash
+   # Move to a directory in your PATH
+   sudo mv todo.py /usr/local/bin/todo
+   
+   # Or create a symlink
+   ln -s $(pwd)/todo.py /usr/local/bin/todo
+   ```
 
 ## Usage
 
-### Basic Commands
+### Add a Todo
 
-#### Add a Task
-
-```bash
-todo add "Buy groceries"
-todo add "Write documentation"
-todo add "Call dentist for appointment"
-```
-
-**Output:**
-```
-✓ Task added: Buy groceries (ID: a1b2c3d4)
-```
-
-#### List All Tasks
+Create a new todo item:
 
 ```bash
-todo list
+python todo.py add "Buy groceries"
+# ✓ Added todo #1: Buy groceries
+
+python todo.py add "Walk the dog"
+# ✓ Added todo #2: Walk the dog
+
+python todo.py add "Finish project report"
+# ✓ Added todo #3: Finish project report
 ```
 
-**Output:**
-```
-[Pending]
-  1. a1b2c3d4 - Buy groceries (Created: 2025-01-30 08:46)
-  2. e5f6g7h8 - Write documentation (Created: 2025-01-30 09:15)
+### List All Todos
 
-[Completed]
-  3. i9j0k1l2 - ✓ Call dentist for appointment (Created: 2025-01-29 14:20)
-```
-
-#### List with Filters
+View all your todos:
 
 ```bash
-# Show only pending tasks
-todo list --pending
-
-# Show only completed tasks
-todo list --completed
-
-# Show all tasks (default)
-todo list --all
+python todo.py list
+# [ ] 1. Buy groceries
+# [ ] 2. Walk the dog
+# [ ] 3. Finish project report
 ```
 
-#### Complete a Task
+Empty list:
+```bash
+python todo.py list
+# No todos yet. Add one with: todo.py add "Your task"
+```
+
+### Complete a Todo
+
+Mark a todo as done:
 
 ```bash
-# Use full ID
-todo complete a1b2c3d4-5678-90ab-cdef-1234567890ab
+python todo.py complete 1
+# ✓ Completed todo #1
 
-# Or use partial ID (minimum 4 characters)
-todo complete a1b2
-
-# Or use first 6-8 characters for clarity
-todo complete a1b2c3d4
+python todo.py list
+# [✓] 1. Buy groceries
+# [ ] 2. Walk the dog
+# [ ] 3. Finish project report
 ```
 
-**Output:**
-```
-✓ Task completed: Buy groceries
-```
+### Delete a Todo
 
-#### Delete a Task
+Remove a todo:
 
 ```bash
-# Use partial ID
-todo delete e5f6
+python todo.py delete 2
+# ✓ Deleted todo #2
 
-# Or full ID
-todo delete e5f6g7h8-90ab-cdef-1234-567890abcdef
+python todo.py list
+# [✓] 1. Buy groceries
+# [ ] 3. Finish project report
 ```
 
-**Output:**
-```
-✓ Task deleted: Write documentation
-```
+### Get Help
 
-### Advanced Usage
-
-#### View Help
+View available commands:
 
 ```bash
-todo --help
-todo add --help
-todo list --help
+python todo.py --help
+# Shows all available commands and options
+
+python todo.py add --help
+# Shows help for the 'add' command
 ```
 
-#### Check Version
+### Check Version
 
 ```bash
-todo --version
+python todo.py --version
+# todo 1.0.0
 ```
 
-#### Handle Special Characters
+## Command Reference
 
-```bash
-# Use quotes for descriptions with spaces or special characters
-todo add "Buy milk & eggs"
-todo add "Research Python's async/await"
-todo add 'Task with "quotes" inside'
-```
+| Command | Description | Example |
+|---------|-------------|---------|
+| `add <description>` | Create a new todo | `python todo.py add "Task description"` |
+| `list` | Show all todos | `python todo.py list` |
+| `complete <id>` | Mark todo as done | `python todo.py complete 1` |
+| `delete <id>` | Remove a todo | `python todo.py delete 1` |
+| `--help` | Show help message | `python todo.py --help` |
+| `--version` | Show version | `python todo.py --version` |
 
-## Data Storage
+## Storage
 
-### Location
+Todos are stored in a JSON file located at:
+- **Unix/macOS**: `~/.todo.json`
+- **Windows**: `C:\Users\<YourUsername>\.todo.json`
 
-Tasks are stored in: `~/.todo.json`
-
-- **Linux/macOS:** `/home/username/.todo.json`
-- **Windows:** `C:\Users\Username\.todo.json`
-
-### Format
+### Storage Format
 
 ```json
 {
-  "version": "1.0.0",
-  "tasks": [
+  "todos": [
     {
-      "id": "a1b2c3d4-5678-90ab-cdef-1234567890ab",
+      "id": 1,
       "description": "Buy groceries",
       "completed": false,
-      "created_at": "2025-01-30T08:46:37Z"
+      "created_at": "2025-01-20T10:30:00.123456"
     }
-  ]
+  ],
+  "next_id": 2
 }
 ```
 
-### Backup
-
-A backup is automatically created before every write operation:
-- **Backup Location:** `~/.todo.json.backup`
-- **Recovery:** Copy backup file to replace corrupted main file if needed
+### Backup Your Todos
 
 ```bash
-# Manual recovery if needed
+# Create a backup
+cp ~/.todo.json ~/.todo.json.backup
+
+# Restore from backup
 cp ~/.todo.json.backup ~/.todo.json
 ```
 
-## Development
+## Error Handling
 
-### Running Tests
+The application provides helpful error messages for common issues:
 
+### Invalid Todo ID
 ```bash
-# Run all tests
-python3 test_todo.py
-
-# Run with verbose output
-python3 test_todo.py -v
-
-# Run specific test class
-python3 -m unittest test_todo.TestTaskManager
-
-# Run specific test method
-python3 -m unittest test_todo.TestTaskManager.test_add_task
+python todo.py complete 999
+# ✗ Todo #999 not found
 ```
 
-### Test Coverage
-
-The test suite includes:
-- ✅ Task model serialization/deserialization
-- ✅ DataStore file operations and error handling
-- ✅ TaskManager business logic and validation
-- ✅ ID prefix matching and ambiguity detection
-- ✅ CLI command parsing and execution
-- ✅ Integration tests for complete workflows
-- ✅ Error conditions and edge cases
-
-### Code Style
-
-The project follows:
-- **PEP 8** style guidelines
-- **Type hints** for all function signatures
-- **Docstrings** for all classes and public methods
-- Maximum line length: 100 characters
-
-### Project Structure
-
+### Empty Description
+```bash
+python todo.py add ""
+# ✗ Todo description cannot be empty
 ```
-cli-todo-app/
-├── todo.py           # Main application (single file)
-├── test_todo.py      # Comprehensive test suite
-└── README.md         # This file
+
+### Negative ID
+```bash
+python todo.py delete -1
+# ✗ Error: Todo ID must be non-negative
+```
+
+### Corrupted Storage File
+```
+Error: Storage file is corrupted at /home/user/.todo.json
+Details: Expecting value: line 1 column 1 (char 0)
+Please fix or delete the file to continue.
 ```
 
 ## Troubleshooting
 
+### Python Version Error
+
+**Problem**: `Error: This application requires Python 3.7 or higher`
+
+**Solution**: Upgrade Python:
+```bash
+# Check your Python version
+python3 --version
+
+# Use python3 explicitly
+python3 todo.py list
+```
+
 ### Permission Denied
 
-**Problem:** `Permission denied` when trying to run `todo`
+**Problem**: Cannot write to storage file
 
-**Solution:**
+**Solution**: Check file permissions:
 ```bash
-chmod +x todo.py
-# Or run with python explicitly
-python3 todo.py add "Task"
+# View permissions
+ls -la ~/.todo.json
+
+# Fix permissions
+chmod 600 ~/.todo.json
 ```
 
-### Command Not Found
+### Storage File Corrupted
 
-**Problem:** `todo: command not found`
+**Problem**: JSON decode error when running commands
 
-**Solution:**
-1. Ensure the file is in your PATH
-2. Or use the full path: `/path/to/todo.py`
-3. Or run with Python: `python3 todo.py`
+**Solution**: 
+1. Backup the file: `cp ~/.todo.json ~/.todo.json.backup`
+2. Delete the corrupted file: `rm ~/.todo.json`
+3. Run any command to recreate: `python todo.py list`
 
-### Corrupted Data File
+### Command Not Found (after installing to PATH)
 
-**Problem:** `Error: Corrupted data file`
+**Problem**: `todo: command not found`
 
-**Solution:**
+**Solution**:
 ```bash
-# Automatic recovery attempts to use backup
-# If that fails, manually restore:
-cp ~/.todo.json.backup ~/.todo.json
+# Make sure the file is executable
+chmod +x /usr/local/bin/todo
 
-# Or start fresh (backs up existing file):
-mv ~/.todo.json ~/.todo.json.old
-todo list  # Creates new empty file
+# Verify it's in PATH
+which todo
+
+# Check PATH includes the directory
+echo $PATH
 ```
 
-### Task ID Not Found
+## Development
 
-**Problem:** `Error: Task not found: abc1`
+### Project Structure
 
-**Solution:**
-- Use at least 4 characters of the task ID
-- Run `todo list` to see all task IDs
-- Copy the full or partial ID from the list output
+```
+todo.py (single file, ~390 lines)
+├── Todo (dataclass) - Data model
+├── TodoStorage (class) - JSON persistence
+├── TodoManager (class) - Business logic
+├── TodoCLI (class) - Command-line interface
+└── main() - Entry point
+```
 
-### Ambiguous Task ID
+### Running Tests
 
-**Problem:** `Error: Ambiguous task ID 'a1b2' matches multiple tasks`
+Manual testing checklist:
 
-**Solution:**
-- Provide more characters to make the ID unique
-- Use 6-8 characters for better specificity
-- Or use the full UUID
+```bash
+# Test adding todos
+python todo.py add "Test task 1"
+python todo.py add "Test task 2"
+python todo.py add "Task with special chars: @#$%"
 
-## Technical Details
+# Test listing
+python todo.py list
 
-### Architecture
+# Test completing
+python todo.py complete 1
 
-- **Task Model:** Dataclass with id, description, completed, created_at
-- **Data Store:** JSON file with atomic writes and backup creation
-- **Task Manager:** Business logic layer with validation
-- **CLI Interface:** Argparse-based command routing
+# Test deleting
+python todo.py delete 2
+
+# Test error cases
+python todo.py complete 999  # Non-existent ID
+python todo.py add ""        # Empty description
+python todo.py delete -1     # Negative ID
+
+# Test edge cases
+python todo.py add "Very long description..." # 1000+ characters
+```
+
+### Code Quality
+
+- **Type hints**: All functions have type annotations
+- **Docstrings**: Comprehensive documentation for all classes and methods
+- **Error handling**: Graceful degradation with helpful error messages
+- **Atomic writes**: Temp file + rename pattern prevents corruption
+- **Cross-platform**: Uses `pathlib` for path handling
+
+## Architecture
+
+The application follows a clean three-layer architecture:
+
+1. **CLI Layer** (`TodoCLI`): Argument parsing and output formatting
+2. **Business Logic Layer** (`TodoManager`): CRUD operations and validation
+3. **Data Layer** (`TodoStorage`): JSON file persistence
 
 ### Design Decisions
 
-1. **Single File:** Maximum portability, zero setup required
-2. **JSON Storage:** Human-readable, easily inspectable/editable
-3. **UUID4 IDs:** Guaranteed uniqueness, no database needed
-4. **Atomic Writes:** Temp file + rename for safe concurrent access
-5. **Standard Library Only:** No dependency management required
+- **JSON over SQLite**: Human-readable, easy to debug, sufficient for personal use
+- **Auto-incrementing IDs**: Never reuse deleted IDs for simplicity
+- **Home directory storage**: Predictable location, user-accessible
+- **No configuration**: Zero-config philosophy with sensible defaults
+- **Timestamps included**: Future-proof for sorting and analytics
 
-### Security Considerations
+## Limitations
 
-- File permissions set to `0600` (user-only read/write)
-- Input validation prevents empty or malicious descriptions
-- No network operations or credential storage
-- Safe handling of user-provided task descriptions
+- **Single user**: No multi-user support or authentication
+- **No concurrency**: Running multiple instances simultaneously may cause conflicts
+- **In-memory operations**: All todos loaded into memory (acceptable for personal use)
+- **No undo**: Deletions are permanent (manual backup recommended)
 
-### Performance
+## Future Enhancements
 
-- Handles 10,000+ tasks without degradation
-- O(n) operations for most commands (acceptable for CLI usage)
-- Minimal memory footprint (loads all tasks into memory)
+The architecture supports future additions:
 
-## Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Follow existing code style
-6. Submit a pull request
+- **Due dates**: Add `due_date` field to Todo model
+- **Priorities**: Add `priority` field (1-5)
+- **Categories/Tags**: Add `tags` field
+- **Search**: Filter todos by keyword
+- **Edit**: Update existing todo descriptions
+- **Export**: Generate CSV or Markdown reports
 
 ## License
 
-This project is open source and available for use without restrictions.
+This is free and unencumbered software released into the public domain.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit issues or pull requests.
 
 ## Support
 
-For issues, questions, or suggestions:
+For issues or questions:
 - Open an issue on GitHub
-- Check existing issues for solutions
-- Review the troubleshooting section above
-
-## Roadmap
-
-Future enhancements under consideration:
-
-- [ ] Task priorities (high, medium, low)
-- [ ] Due dates and reminders
-- [ ] Task categories/tags
-- [ ] Search and filter by description
-- [ ] Export to other formats (CSV, Markdown)
-- [ ] Task editing (update description)
-- [ ] Recurring tasks
-- [ ] Task notes/details
-- [ ] SQLite backend option
-- [ ] Color output (with termcolor detection)
-
-## Examples
-
-### Daily Workflow
-
-```bash
-# Morning: Add tasks for the day
-todo add "Review pull requests"
-todo add "Update project documentation"
-todo add "Team standup at 10am"
-todo add "Deploy v2.0 to staging"
-
-# Check what's pending
-todo list --pending
-
-# Complete tasks as you go
-todo complete team
-todo complete review
-
-# Evening: Review completed tasks
-todo list --completed
-
-# Clean up finished tasks
-todo delete team
-todo delete review
-```
-
-### Project Management
-
-```bash
-# Start a new project
-todo add "Create project repository"
-todo add "Write README"
-todo add "Setup CI/CD pipeline"
-todo add "Implement core features"
-todo add "Write tests"
-
-# Track progress
-todo list
-
-# Mark milestones
-todo complete create
-todo complete write
-# ... continue working
-```
-
-### Quick Reference
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `add` | Add new task | `todo add "Task description"` |
-| `list` | Show all tasks | `todo list` |
-| `list --pending` | Show pending only | `todo list --pending` |
-| `list --completed` | Show completed only | `todo list --completed` |
-| `complete <id>` | Mark as complete | `todo complete abc1` |
-| `delete <id>` | Remove task | `todo delete abc1` |
-| `--help` | Show help | `todo --help` |
-| `--version` | Show version | `todo --version` |
+- Check the troubleshooting section above
+- Review the storage file format for manual debugging
 
 ---
 
 **Made with ❤️ using Python**
-
-**Version:** 1.0.0
