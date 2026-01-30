@@ -2,401 +2,282 @@
 """
 CLI Todo Application
 
-A simple command-line todo list manager using Python standard library only.
-Stores tasks in JSON format in the user's home directory (~/.todo.json).
+A simple command-line todo list manager that stores todos in a JSON file.
+All todos are persisted in ~/.todo.json for cross-session availability.
 
 Usage:
-    todo add "Task description"
-    todo list [--all | --pending | --completed]
-    todo complete <task-id>
-    todo delete <task-id>
+    python todo.py add "Buy groceries"
+    python todo.py list
+    python todo.py complete 1
+    python todo.py delete 1
+    python todo.py --help
+
+Requirements:
+    - Python 3.7 or higher (for dataclass support)
+    - No external dependencies (stdlib only)
 """
 
 import argparse
 import json
 import sys
-import uuid
 from dataclasses import dataclass, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional, Dict, Any
-import os
-import shutil
+from typing import List, Dict, Any, Optional
 
-# Application version
+# Constants
 VERSION = "1.0.0"
-
-# Data file location
-DATA_FILE = Path.home() / ".todo.json"
-BACKUP_FILE = Path.home() / ".todo.json.backup"
+STORAGE_FILENAME = ".todo.json"
 
 
 @dataclass
-class Task:
+class Todo:
     """
-    Represents a single todo task.
+    Represents a single todo item.
     
     Attributes:
-        id: Unique identifier (UUID4)
-        description: Task description text
+        id: Unique identifier for the todo
+        description: Text description of the task
         completed: Whether the task is completed
-        created_at: ISO timestamp of task creation
+        created_at: ISO timestamp of when the todo was created
     """
-    id: str
+    id: int
     description: str
     completed: bool
     created_at: str
-    
+
     def to_dict(self) -> Dict[str, Any]:
-        """Convert task to dictionary for JSON serialization."""
+        """Convert Todo to dictionary for JSON serialization."""
         return asdict(self)
-    
+
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> 'Task':
-        """Create task from dictionary loaded from JSON."""
-        return cls(
-            id=data['id'],
-            description=data['description'],
-            completed=data['completed'],
-            created_at=data['created_at']
-        )
-    
-    def get_short_id(self, length: int = 8) -> str:
-        """Get shortened version of UUID for display."""
-        return self.id[:length]
-    
-    def format_created_at(self) -> str:
-        """Format creation timestamp for display."""
-        try:
-            dt = datetime.fromisoformat(self.created_at.replace('Z', '+00:00'))
-            return dt.strftime('%Y-%m-%d %H:%M')
-        except (ValueError, AttributeError):
-            return self.created_at
+    def from_dict(cls, data: Dict[str, Any]) -> 'Todo':
+        """Create Todo instance from dictionary."""
+        return cls(**data)
 
 
-class DataStore:
+class TodoStorage:
     """
-    Handles all data persistence operations with JSON file storage.
+    Handles persistence of todos to JSON file on disk.
     
-    Provides atomic writes, backup creation, and error recovery for the task list.
+    Provides atomic write operations and manages the storage file location
+    in the user's home directory (~/.todo.json).
     """
-    
-    def __init__(self, file_path: Path = DATA_FILE):
+
+    def __init__(self):
+        self.storage_path = self.get_storage_path()
+        self.initialize_storage()
+
+    @staticmethod
+    def get_storage_path() -> Path:
         """
-        Initialize data store with file path.
-        
-        Args:
-            file_path: Path to the JSON data file
-        """
-        self.file_path = file_path
-        self.backup_path = BACKUP_FILE
-    
-    def load_tasks(self) -> List[Task]:
-        """
-        Load all tasks from JSON file.
+        Get the path to the storage file.
         
         Returns:
-            List of Task objects
+            Path object pointing to ~/.todo.json
+        """
+        return Path.home() / STORAGE_FILENAME
+
+    def initialize_storage(self) -> None:
+        """
+        Create storage file with empty structure if it doesn't exist.
+        """
+        if not self.storage_path.exists():
+            self.save({"todos": [], "next_id": 1})
+
+    def load(self) -> Dict[str, Any]:
+        """
+        Load todos from storage file.
+        
+        Returns:
+            Dictionary with 'todos' list and 'next_id' counter
             
         Raises:
-            DataStoreError: If file is corrupted or cannot be read
+            SystemExit: If file is corrupted or cannot be read
         """
-        # Create file if it doesn't exist
-        if not self.file_path.exists():
-            self._initialize_file()
-            return []
-        
         try:
-            with open(self.file_path, 'r', encoding='utf-8') as f:
+            with open(self.storage_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-            
-            # Validate schema version
-            if 'version' not in data:
-                print("Warning: Legacy data format detected, migrating...", 
-                      file=sys.stderr)
-            
-            # Extract tasks
-            task_data = data.get('tasks', [])
-            tasks = [Task.from_dict(t) for t in task_data]
-            return tasks
+                
+            # Validate structure
+            if not isinstance(data, dict) or 'todos' not in data or 'next_id' not in data:
+                raise ValueError("Invalid storage file structure")
+                
+            return data
             
         except json.JSONDecodeError as e:
-            # Try to recover from backup
-            if self.backup_path.exists():
-                print(f"Error: Corrupted data file. Attempting recovery from backup...",
-                      file=sys.stderr)
-                try:
-                    return self._recover_from_backup()
-                except Exception as backup_error:
-                    raise DataStoreError(
-                        f"Failed to load tasks and backup recovery failed: {backup_error}"
-                    ) from e
-            else:
-                raise DataStoreError(
-                    f"Corrupted data file and no backup available: {e}"
-                ) from e
-                
-        except (OSError, IOError) as e:
-            raise DataStoreError(f"Cannot read data file: {e}") from e
-        except (KeyError, TypeError) as e:
-            raise DataStoreError(f"Invalid data format: {e}") from e
-    
-    def save_tasks(self, tasks: List[Task]) -> None:
+            print(f"Error: Storage file is corrupted at {self.storage_path}", file=sys.stderr)
+            print(f"Details: {e}", file=sys.stderr)
+            print("Please fix or delete the file to continue.", file=sys.stderr)
+            sys.exit(1)
+        except (IOError, PermissionError) as e:
+            print(f"Error: Cannot read storage file at {self.storage_path}", file=sys.stderr)
+            print(f"Details: {e}", file=sys.stderr)
+            sys.exit(1)
+        except ValueError as e:
+            print(f"Error: {e}", file=sys.stderr)
+            print(f"Storage file location: {self.storage_path}", file=sys.stderr)
+            sys.exit(1)
+
+    def save(self, data: Dict[str, Any]) -> None:
         """
-        Save tasks to JSON file with atomic write.
+        Save todos to storage file using atomic write pattern.
+        
+        Writes to a temporary file first, then renames to ensure
+        atomicity and prevent corruption.
         
         Args:
-            tasks: List of Task objects to save
+            data: Dictionary containing 'todos' and 'next_id'
             
         Raises:
-            DataStoreError: If file cannot be written
+            SystemExit: If file cannot be written
         """
-        # Create backup of existing file
-        if self.file_path.exists():
-            try:
-                shutil.copy2(self.file_path, self.backup_path)
-            except (OSError, IOError) as e:
-                print(f"Warning: Could not create backup: {e}", file=sys.stderr)
+        temp_path = self.storage_path.with_suffix('.tmp')
         
-        # Prepare data structure
-        data = {
-            'version': VERSION,
-            'tasks': [task.to_dict() for task in tasks]
-        }
-        
-        # Atomic write using temp file + rename
-        temp_file = self.file_path.with_suffix('.tmp')
         try:
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            # Write to temporary file
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-                f.write('\n')  # Ensure newline at end of file
             
-            # Atomic rename (POSIX systems guarantee atomicity)
-            os.replace(temp_file, self.file_path)
+            # Atomic rename
+            temp_path.replace(self.storage_path)
             
-            # Set file permissions to user-only read/write
-            try:
-                os.chmod(self.file_path, 0o600)
-            except (OSError, AttributeError):
-                # May fail on Windows, but not critical
-                pass
-                
-        except (OSError, IOError) as e:
-            # Clean up temp file if it exists
-            if temp_file.exists():
-                try:
-                    temp_file.unlink()
-                except OSError:
-                    pass
-            raise DataStoreError(f"Cannot save tasks: {e}") from e
-    
-    def _initialize_file(self) -> None:
-        """Create new data file with empty task list."""
-        initial_data = {
-            'version': VERSION,
-            'tasks': []
-        }
-        try:
-            with open(self.file_path, 'w', encoding='utf-8') as f:
-                json.dump(initial_data, f, indent=2)
-                f.write('\n')
-            
-            # Set restrictive permissions
-            try:
-                os.chmod(self.file_path, 0o600)
-            except (OSError, AttributeError):
-                pass
-                
-        except (OSError, IOError) as e:
-            raise DataStoreError(f"Cannot create data file: {e}") from e
-    
-    def _recover_from_backup(self) -> List[Task]:
-        """Attempt to recover data from backup file."""
-        with open(self.backup_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        
-        tasks = [Task.from_dict(t) for t in data.get('tasks', [])]
-        
-        # Restore backup to main file
-        shutil.copy2(self.backup_path, self.file_path)
-        print("✓ Successfully recovered from backup", file=sys.stderr)
-        
-        return tasks
+        except (IOError, PermissionError) as e:
+            print(f"Error: Cannot write to storage file at {self.storage_path}", file=sys.stderr)
+            print(f"Details: {e}", file=sys.stderr)
+            if temp_path.exists():
+                temp_path.unlink()
+            sys.exit(1)
 
 
-class TaskManager:
+class TodoManager:
     """
-    Manages business logic for task operations.
+    Manages business logic for todo operations.
     
-    Handles CRUD operations, validation, and task filtering.
+    Handles CRUD operations and enforces business rules like
+    unique IDs and data validation.
     """
-    
-    def __init__(self, data_store: DataStore):
+
+    def __init__(self):
+        self.storage = TodoStorage()
+
+    def add_todo(self, description: str) -> Todo:
         """
-        Initialize task manager with data store.
+        Create a new todo.
         
         Args:
-            data_store: DataStore instance for persistence
-        """
-        self.data_store = data_store
-    
-    def add_task(self, description: str) -> Task:
-        """
-        Create and add a new task.
-        
-        Args:
-            description: Task description text
+            description: Text description of the task
             
         Returns:
-            The created Task object
+            The created Todo object
             
         Raises:
-            ValidationError: If description is empty
-            DataStoreError: If save fails
+            ValueError: If description is empty or invalid
         """
-        if not description or not description.strip():
-            raise ValidationError("Task description cannot be empty")
+        # Validate description
+        description = description.strip()
+        if not description:
+            raise ValueError("Todo description cannot be empty")
         
-        # Create new task
-        task = Task(
-            id=str(uuid.uuid4()),
-            description=description.strip(),
+        if len(description) > 1000:
+            raise ValueError("Todo description is too long (max 1000 characters)")
+        
+        # Load current state
+        data = self.storage.load()
+        
+        # Create new todo
+        todo = Todo(
+            id=data['next_id'],
+            description=description,
             completed=False,
-            created_at=datetime.utcnow().isoformat() + 'Z'
+            created_at=datetime.now().isoformat()
         )
         
-        # Load existing tasks, add new one, and save
-        tasks = self.data_store.load_tasks()
-        tasks.append(task)
-        self.data_store.save_tasks(tasks)
+        # Update state
+        data['todos'].append(todo.to_dict())
+        data['next_id'] += 1
         
-        return task
-    
-    def get_all_tasks(self, filter_status: Optional[str] = None) -> List[Task]:
+        # Save
+        self.storage.save(data)
+        
+        return todo
+
+    def list_todos(self) -> List[Todo]:
         """
-        Retrieve all tasks, optionally filtered by status.
+        Get all todos.
+        
+        Returns:
+            List of Todo objects ordered by ID
+        """
+        data = self.storage.load()
+        return [Todo.from_dict(todo_dict) for todo_dict in data['todos']]
+
+    def complete_todo(self, todo_id: int) -> bool:
+        """
+        Mark a todo as completed.
         
         Args:
-            filter_status: 'pending', 'completed', or None for all
+            todo_id: ID of the todo to complete
             
         Returns:
-            List of Task objects
+            True if todo was found and completed, False otherwise
         """
-        tasks = self.data_store.load_tasks()
+        data = self.storage.load()
         
-        if filter_status == 'pending':
-            return [t for t in tasks if not t.completed]
-        elif filter_status == 'completed':
-            return [t for t in tasks if t.completed]
-        else:
-            return tasks
-    
-    def complete_task(self, task_id: str) -> Task:
+        # Find todo by ID
+        for todo_dict in data['todos']:
+            if todo_dict['id'] == todo_id:
+                todo_dict['completed'] = True
+                self.storage.save(data)
+                return True
+        
+        return False
+
+    def delete_todo(self, todo_id: int) -> bool:
         """
-        Mark a task as completed.
+        Delete a todo.
         
         Args:
-            task_id: Full or partial task ID (minimum 4 characters)
+            todo_id: ID of the todo to delete
             
         Returns:
-            The completed Task object
-            
-        Raises:
-            ValidationError: If task ID is invalid or not found
-            DataStoreError: If save fails
+            True if todo was found and deleted, False otherwise
         """
-        tasks = self.data_store.load_tasks()
-        task = self._find_task_by_id(tasks, task_id)
+        data = self.storage.load()
         
-        if task.completed:
-            raise ValidationError(f"Task is already completed: {task.description}")
+        # Find and remove todo
+        original_length = len(data['todos'])
+        data['todos'] = [t for t in data['todos'] if t['id'] != todo_id]
         
-        task.completed = True
-        self.data_store.save_tasks(tasks)
+        if len(data['todos']) < original_length:
+            self.storage.save(data)
+            return True
         
-        return task
-    
-    def delete_task(self, task_id: str) -> Task:
-        """
-        Delete a task.
-        
-        Args:
-            task_id: Full or partial task ID (minimum 4 characters)
-            
-        Returns:
-            The deleted Task object
-            
-        Raises:
-            ValidationError: If task ID is invalid or not found
-            DataStoreError: If save fails
-        """
-        tasks = self.data_store.load_tasks()
-        task = self._find_task_by_id(tasks, task_id)
-        
-        # Remove task from list
-        tasks = [t for t in tasks if t.id != task.id]
-        self.data_store.save_tasks(tasks)
-        
-        return task
-    
-    def _find_task_by_id(self, tasks: List[Task], task_id: str) -> Task:
-        """
-        Find task by full or partial ID.
-        
-        Args:
-            tasks: List of tasks to search
-            task_id: Full or partial UUID (minimum 4 characters)
-            
-        Returns:
-            Matching Task object
-            
-        Raises:
-            ValidationError: If ID is too short, not found, or ambiguous
-        """
-        if len(task_id) < 4:
-            raise ValidationError(
-                "Task ID must be at least 4 characters long"
-            )
-        
-        # Find matching tasks
-        matches = [t for t in tasks if t.id.startswith(task_id)]
-        
-        if len(matches) == 0:
-            raise ValidationError(
-                f"Task not found: {task_id}"
-            )
-        elif len(matches) > 1:
-            raise ValidationError(
-                f"Ambiguous task ID '{task_id}' matches multiple tasks. "
-                f"Please provide more characters."
-            )
-        
-        return matches[0]
+        return False
 
 
 class TodoCLI:
     """
     Command-line interface for the todo application.
     
-    Handles argument parsing and command routing.
+    Handles argument parsing, command routing, and output formatting.
     """
-    
-    def __init__(self, task_manager: TaskManager):
+
+    def __init__(self):
+        self.manager = TodoManager()
+        self.parser = self.create_parser()
+
+    def create_parser(self) -> argparse.ArgumentParser:
         """
-        Initialize CLI with task manager.
+        Create and configure the argument parser.
         
-        Args:
-            task_manager: TaskManager instance for business logic
+        Returns:
+            Configured ArgumentParser instance
         """
-        self.task_manager = task_manager
-        self.parser = self._create_parser()
-    
-    def _create_parser(self) -> argparse.ArgumentParser:
-        """Create and configure argument parser."""
         parser = argparse.ArgumentParser(
             prog='todo',
-            description='Simple CLI todo list manager',
-            epilog='Store your tasks and stay organized!'
+            description='A simple CLI todo list manager',
+            epilog='Todos are stored in ~/.todo.json'
         )
         
         parser.add_argument(
@@ -405,169 +286,192 @@ class TodoCLI:
             version=f'%(prog)s {VERSION}'
         )
         
-        subparsers = parser.add_subparsers(
-            dest='command',
-            help='Available commands',
-            required=True
-        )
+        subparsers = parser.add_subparsers(dest='command', help='Available commands')
         
         # Add command
         add_parser = subparsers.add_parser(
             'add',
-            help='Add a new task'
+            help='Add a new todo'
         )
         add_parser.add_argument(
             'description',
-            help='Task description'
+            type=str,
+            help='Description of the todo'
         )
         
         # List command
-        list_parser = subparsers.add_parser(
+        subparsers.add_parser(
             'list',
-            help='List tasks'
-        )
-        filter_group = list_parser.add_mutually_exclusive_group()
-        filter_group.add_argument(
-            '--all',
-            action='store_const',
-            const=None,
-            dest='filter',
-            help='Show all tasks (default)'
-        )
-        filter_group.add_argument(
-            '--pending',
-            action='store_const',
-            const='pending',
-            dest='filter',
-            help='Show only pending tasks'
-        )
-        filter_group.add_argument(
-            '--completed',
-            action='store_const',
-            const='completed',
-            dest='filter',
-            help='Show only completed tasks'
+            help='List all todos'
         )
         
         # Complete command
         complete_parser = subparsers.add_parser(
             'complete',
-            help='Mark a task as completed'
+            help='Mark a todo as completed'
         )
         complete_parser.add_argument(
-            'task_id',
-            help='Task ID (full or partial, min 4 chars)'
+            'id',
+            type=int,
+            help='ID of the todo to complete'
         )
         
         # Delete command
         delete_parser = subparsers.add_parser(
             'delete',
-            help='Delete a task'
+            help='Delete a todo'
         )
         delete_parser.add_argument(
-            'task_id',
-            help='Task ID (full or partial, min 4 chars)'
+            'id',
+            type=int,
+            help='ID of the todo to delete'
         )
         
         return parser
-    
-    def run(self, args: List[str]) -> int:
+
+    def display_todos(self, todos: List[Todo]) -> None:
         """
-        Execute CLI command.
+        Display todos in a formatted list.
         
         Args:
-            args: Command-line arguments (excluding program name)
+            todos: List of Todo objects to display
+        """
+        if not todos:
+            print("No todos yet. Add one with: todo.py add \"Your task\"")
+            return
+        
+        for todo in todos:
+            checkbox = "[✓]" if todo.completed else "[ ]"
+            print(f"{checkbox} {todo.id}. {todo.description}")
+
+    def display_message(self, message: str, is_error: bool = False) -> None:
+        """
+        Display a message to the user.
+        
+        Args:
+            message: Message text to display
+            is_error: Whether this is an error message
+        """
+        if is_error:
+            print(f"✗ {message}", file=sys.stderr)
+        else:
+            print(f"✓ {message}")
+
+    def handle_add(self, args: argparse.Namespace) -> int:
+        """
+        Handle the 'add' command.
+        
+        Args:
+            args: Parsed command-line arguments
             
         Returns:
             Exit code (0 for success, 1 for error)
         """
         try:
-            parsed_args = self.parser.parse_args(args)
-            
-            if parsed_args.command == 'add':
-                return self._cmd_add(parsed_args.description)
-            elif parsed_args.command == 'list':
-                return self._cmd_list(parsed_args.filter)
-            elif parsed_args.command == 'complete':
-                return self._cmd_complete(parsed_args.task_id)
-            elif parsed_args.command == 'delete':
-                return self._cmd_delete(parsed_args.task_id)
-            else:
-                print(f"Error: Unknown command: {parsed_args.command}", 
-                      file=sys.stderr)
-                return 1
-                
-        except (ValidationError, DataStoreError) as e:
-            print(f"Error: {e}", file=sys.stderr)
-            return 1
-        except KeyboardInterrupt:
-            print("\nOperation cancelled", file=sys.stderr)
-            return 130
-        except Exception as e:
-            print(f"Unexpected error: {e}", file=sys.stderr)
-            return 1
-    
-    def _cmd_add(self, description: str) -> int:
-        """Handle 'add' command."""
-        task = self.task_manager.add_task(description)
-        print(f"✓ Task added: {task.description} (ID: {task.get_short_id()})")
-        return 0
-    
-    def _cmd_list(self, filter_status: Optional[str]) -> int:
-        """Handle 'list' command."""
-        tasks = self.task_manager.get_all_tasks(filter_status)
-        
-        if not tasks:
-            filter_msg = {
-                'pending': 'No pending tasks',
-                'completed': 'No completed tasks',
-                None: 'No tasks found'
-            }
-            print(filter_msg.get(filter_status, 'No tasks found'))
+            todo = self.manager.add_todo(args.description)
+            self.display_message(f"Added todo #{todo.id}: {todo.description}")
             return 0
+        except ValueError as e:
+            self.display_message(str(e), is_error=True)
+            return 1
+
+    def handle_list(self, args: argparse.Namespace) -> int:
+        """
+        Handle the 'list' command.
         
-        # Group tasks by status
-        pending = [t for t in tasks if not t.completed]
-        completed = [t for t in tasks if t.completed]
-        
-        # Display pending tasks
-        if pending and (filter_status is None or filter_status == 'pending'):
-            print("\n[Pending]")
-            for i, task in enumerate(pending, 1):
-                print(f"  {i}. {task.get_short_id()} - {task.description} "
-                      f"(Created: {task.format_created_at()})")
-        
-        # Display completed tasks
-        if completed and (filter_status is None or filter_status == 'completed'):
-            print("\n[Completed]")
-            for i, task in enumerate(completed, 1):
-                print(f"  {i}. {task.get_short_id()} - ✓ {task.description} "
-                      f"(Created: {task.format_created_at()})")
-        
-        print()  # Empty line at end
+        Args:
+            args: Parsed command-line arguments
+            
+        Returns:
+            Exit code (always 0)
+        """
+        todos = self.manager.list_todos()
+        self.display_todos(todos)
         return 0
+
+    def handle_complete(self, args: argparse.Namespace) -> int:
+        """
+        Handle the 'complete' command.
+        
+        Args:
+            args: Parsed command-line arguments
+            
+        Returns:
+            Exit code (0 for success, 1 for error)
+        """
+        if args.id < 0:
+            self.display_message("Error: Todo ID must be non-negative", is_error=True)
+            return 1
+        
+        success = self.manager.complete_todo(args.id)
+        if success:
+            self.display_message(f"Completed todo #{args.id}")
+            return 0
+        else:
+            self.display_message(f"Todo #{args.id} not found", is_error=True)
+            return 1
+
+    def handle_delete(self, args: argparse.Namespace) -> int:
+        """
+        Handle the 'delete' command.
+        
+        Args:
+            args: Parsed command-line arguments
+            
+        Returns:
+            Exit code (0 for success, 1 for error)
+        """
+        if args.id < 0:
+            self.display_message("Error: Todo ID must be non-negative", is_error=True)
+            return 1
+        
+        success = self.manager.delete_todo(args.id)
+        if success:
+            self.display_message(f"Deleted todo #{args.id}")
+            return 0
+        else:
+            self.display_message(f"Todo #{args.id} not found", is_error=True)
+            return 1
+
+    def execute(self) -> int:
+        """
+        Parse arguments and execute the appropriate command.
+        
+        Returns:
+            Exit code (0 for success, 1 for error)
+        """
+        args = self.parser.parse_args()
+        
+        if args.command is None:
+            self.parser.print_help()
+            return 1
+        
+        # Route to appropriate handler
+        handlers = {
+            'add': self.handle_add,
+            'list': self.handle_list,
+            'complete': self.handle_complete,
+            'delete': self.handle_delete
+        }
+        
+        handler = handlers.get(args.command)
+        if handler:
+            return handler(args)
+        else:
+            self.parser.print_help()
+            return 1
+
+
+def check_python_version() -> None:
+    """
+    Check if Python version meets minimum requirements.
     
-    def _cmd_complete(self, task_id: str) -> int:
-        """Handle 'complete' command."""
-        task = self.task_manager.complete_task(task_id)
-        print(f"✓ Task completed: {task.description}")
-        return 0
-    
-    def _cmd_delete(self, task_id: str) -> int:
-        """Handle 'delete' command."""
-        task = self.task_manager.delete_task(task_id)
-        print(f"✓ Task deleted: {task.description}")
-        return 0
-
-
-class ValidationError(Exception):
-    """Raised when input validation fails."""
-    pass
-
-
-class DataStoreError(Exception):
-    """Raised when data persistence operations fail."""
-    pass
+    Exits with error message if version is too old.
+    """
+    if sys.version_info < (3, 7):
+        print("Error: This application requires Python 3.7 or higher", file=sys.stderr)
+        print(f"Current version: Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}", file=sys.stderr)
+        sys.exit(1)
 
 
 def main() -> int:
@@ -575,21 +479,21 @@ def main() -> int:
     Main entry point for the application.
     
     Returns:
-        Exit code (0 for success, non-zero for errors)
+        Exit code (0 for success, 1 for error)
     """
+    # Check Python version
+    check_python_version()
+    
     try:
-        # Initialize components
-        data_store = DataStore()
-        task_manager = TaskManager(data_store)
-        cli = TodoCLI(task_manager)
-        
-        # Run CLI with command-line arguments
-        return cli.run(sys.argv[1:])
-        
+        cli = TodoCLI()
+        return cli.execute()
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user", file=sys.stderr)
+        return 1
     except Exception as e:
-        print(f"Fatal error: {e}", file=sys.stderr)
+        print(f"Unexpected error: {e}", file=sys.stderr)
         return 1
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     sys.exit(main())
